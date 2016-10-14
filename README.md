@@ -2,7 +2,7 @@
 Abstract interpretation using lattices to analyse the possible sign of  a variable at any point in a program.
 
 # binja_memcpy.py
-A simple plugin demonstrating the binja headless api for python. Finds memcpy's and cooresponding src/dst information. The plguin can be moditified to find argument information for other function calls.
+A simple plugin demonstrating the binja headless api for python. Finds memcpy's and corresponding src/dst information. The plugin can be modified to find argument information for other function calls.
 
 # walk_via_dfs.py
 A plugin template to walk the binja CFG using the depth-first search algorithm (aka path sensitive, one path traversed at a time)

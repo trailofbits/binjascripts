@@ -127,7 +127,7 @@ class registers(object):
 			(self.ecx).alter_current_abstract_domain(val)
 
 		if reg == "edx" or reg == "rdx":
-			(self.ecx).alter_current_abstract_domain(val)
+			(self.edx).alter_current_abstract_domain(val)
 
 	def get_current_abstract_domain(self, reg):
 		if reg == "eax" or reg == "rax":
@@ -140,7 +140,7 @@ class registers(object):
 			return (self.ecx).get_current_abstract_domain()
 		
 		if reg == "edx" or reg == "rdx":
-			return (self.ecx).get_current_abstract_domain()
+			return (self.edx).get_current_abstract_domain()
 
 
 def trace_variables(view, inst, func):
