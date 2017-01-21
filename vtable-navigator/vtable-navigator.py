@@ -9,7 +9,7 @@ def find_vtable(bv, function_il):
         for il in bb:
             # vtable is referenced directly
             if (il.operation == LLIL_STORE and
-                il.dest.operation = LLIL_REG and
+                il.dest.operation == LLIL_REG and
                 il.src.operation == LLIL_CONST):
                 fp = struct.unpack(
                     '<Q' if bv.address_size == 8 else '<L',
