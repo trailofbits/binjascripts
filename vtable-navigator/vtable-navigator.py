@@ -1,10 +1,13 @@
 # Navigating to a Virtual Function based on an Indirect Call
 
 import struct
+import re
 
 from binaryninja import *
 
 def find_vtable(bv, function_il):
+    source_function = function_il.source_function
+
     for bb in function_il:
         for il in bb:
             # vtable is referenced directly
@@ -25,7 +28,7 @@ def find_vtable(bv, function_il):
             if (il.operation == LLIL_STORE and
                 il.dest.operation == LLIL_REG and
                 il.src.operation == LLIL_REG):
-                reg_value = function_il.source_function.get_reg_value_at_low_level_il_instruction(
+                reg_value = source_function.get_reg_value_at_low_level_il_instruction(
                     il.instr_index,
                     il.src.src
                 )
@@ -42,10 +45,23 @@ def find_vtable(bv, function_il):
                     return reg_value.value
     return None
 
-def find_constructor(bv, class_name):
-    for symbol in bv.symbols.values():
-        if symbol.short_name == "{}::{}".format(class_name, class_name):
-            return bv.get_function_at(bv.platform, symbol.address)
+def find_constructor(bv):
+    constructor_list = [(c.short_name, c.address) for c in bv.symbols.values()
+                        if re.match(r'([A-Za-z0-9_]+)\:\:\1', c.short_name)]
+
+    if not len(constructor_list):
+        log_alert("No constructors found!")
+
+    constructor = get_choice_input(
+        'Choose a constructor', 'Constructors:',
+        [x[0] for x in constructor_list]
+    )
+
+    if constructor is not None:
+        return bv.get_function_at(
+            bv.platform, constructor_list[constructor][1]
+        )
+
     return None
 
 def get_current_function(bv, address):
@@ -107,18 +123,9 @@ def find_function_offset(bv, address):
     return offset
 
 def navigate_to_virtual_function(bv, address):
-    class_name = get_text_line_input('Enter class name', '')
-
-    if not class_name:
-        return
-
-    constructor = find_constructor(bv, class_name)
+    constructor = find_constructor(bv)
 
     if constructor is None:
-        log_alert("Couldn't find constructor {}::{}".format(
-                class_name, class_name
-            )
-        )
         return
 
     vtable = find_vtable(bv, constructor.low_level_il)
