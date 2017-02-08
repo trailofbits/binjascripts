@@ -61,7 +61,7 @@ def handle_reg(vtable, bv, il, expr, current_defs, defs, load_count):
     # In this example, we really shouldn't need to worry about
     # temporary registers, but we check for it just in case. If we
     # do hit a temp register, bail.
-    if isinstance(expr.src, int) and LLIL_REG_IS_TEMP(expr.src):
+    if isinstance(expr.src, (int, long)) and LLIL_REG_IS_TEMP(expr.src):
         return None
 
     # Retrieve the LLIL expression that this register currently
@@ -142,10 +142,12 @@ def find_vtable(bv, function_il):
 
     for bb in function_il:
         for il in bb:
+            # If it's not a memory store, then it's not a vtable.
+            if il.operation != LLIL_STORE:
+                continue
+
             # vtable is referenced directly
-            if (il.operation == LLIL_STORE and
-                il.dest.operation == LLIL_REG and
-                il.src.operation == LLIL_CONST):
+            if (il.dest.operation, il.src.operation) == (LLIL_REG, LLIL_CONST):
                 fp = read_value(bv, il.src.value, bv.address_size)
 
                 if not bv.is_offset_executable(fp):
@@ -154,9 +156,7 @@ def find_vtable(bv, function_il):
                 return il.src.value
 
             # vtable is first loaded into a register, then stored
-            if (il.operation == LLIL_STORE and
-                il.dest.operation == LLIL_REG and
-                il.src.operation == LLIL_REG):
+            if (il.dest.operation, il.src.operation) == (LLIL_REG, LLIL_REG):
                 reg_value = source_function.get_reg_value_at_low_level_il_instruction(
                     il.instr_index,
                     il.src.src
@@ -214,13 +214,13 @@ def navigate_to_virtual_function(bv, addr):
         log_alert("Couldn't find vtable for class {}".format(class_name))
         return
 
-    offset = find_function_offset(vtable, bv, addr)
+    function_pointer = find_function_offset(vtable, bv, addr)
 
-    if offset is None:
+    if function_pointer is None:
         log_alert("Couldn't find vtable offset for this call!")
         return
 
-    bv.file.navigate(bv.file.view, offset)
+    bv.file.navigate(bv.file.view, function_pointer)
 
 PluginCommand.register_for_address(
     "Navigate to Virtual Function",
