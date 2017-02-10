@@ -1,21 +1,28 @@
-from binaryninja import *
+import re
+import struct
 from collections import defaultdict
 from copy import copy
-import struct
-import re
+
+from binaryninja import (LLIL_ADD, LLIL_CALL, LLIL_CONST, LLIL_LOAD, LLIL_REG,
+                         LLIL_SET_REG, LLIL_STORE, ConstantValue, LittleEndian,
+                         PluginCommand, get_choice_input, log_alert)
+
 
 def read_value(bv, addr, size):
+
     fmt = {1: 'B', 2: 'H', 4: 'L', 8: 'Q'}
     return struct.unpack(
         ('<' if bv.endianness is LittleEndian else '') + fmt[size],
         bv.read(addr, size)
     )[0]
 
+
 def get_llil_basic_block(il, idx):
     for bb in il:
         if bb.start <= idx < bb.end:
             return bb
     return None
+
 
 def handle_add(vtable, bv, expr, current_defs, defs, load_count):
     left = expr.left
@@ -34,6 +41,7 @@ def handle_add(vtable, bv, expr, current_defs, defs, load_count):
 
     return left_value + right_value
 
+
 def handle_load(vtable, bv, expr, current_defs, defs, load_count):
     load_count += 1
 
@@ -49,22 +57,24 @@ def handle_load(vtable, bv, expr, current_defs, defs, load_count):
     # Read the value at the specified address.
     return read_value(bv, addr, expr.size)
 
+
 def handle_reg(vtable, bv, expr, current_defs, defs, load_count):
     # Retrieve the LLIL expression that this register currently
     # represents.
-    set_reg = current_defs.get(
-        expr.src, None
-    )
+    set_reg = current_defs.get(expr.src, None)
     if set_reg is None:
         return None
 
+    new_defs = defs.get(set_reg.instr_index, {})
+
     return operation_handler[set_reg.src.operation](
-        vtable, bv, set_reg.src,
-        defs.get(set_reg.instr_index, {}), defs, load_count
+        vtable, bv, set_reg.src, new_defs, defs, load_count
     )
+
 
 def handle_const(vtable, bv, expr, current_defs, defs, load_count):
     return expr.value
+
 
 # This lets us handle expressions in a more generic way.
 # operation handlers take the following parameters:
@@ -79,6 +89,7 @@ operation_handler[LLIL_ADD] = handle_add
 operation_handler[LLIL_REG] = handle_reg
 operation_handler[LLIL_LOAD] = handle_load
 operation_handler[LLIL_CONST] = handle_const
+
 
 def preprocess_basic_block(bb):
     defs = {}
@@ -97,10 +108,12 @@ def preprocess_basic_block(bb):
 
     return defs
 
+
 def calculate_offset(vtable, bv, expr, current_defs, defs):
     return operation_handler[expr.operation](
         vtable, bv, expr, current_defs, defs, 0
     )
+
 
 def find_constructor(bv):
     constructor_list = [(c.short_name, c.address) for c in bv.symbols.values()
@@ -121,8 +134,9 @@ def find_constructor(bv):
 
     return None
 
+
 def find_vtable(bv, function_il):
-    source_function = function_il.source_function
+    src_func = function_il.source_function
 
     for bb in function_il:
         for il in bb:
@@ -141,9 +155,8 @@ def find_vtable(bv, function_il):
 
             # vtable is first loaded into a register, then stored
             if (il.dest.operation, il.src.operation) == (LLIL_REG, LLIL_REG):
-                reg_value = source_function.get_reg_value_at_low_level_il_instruction(
-                    il.instr_index,
-                    il.src.src
+                reg_value = src_func.get_reg_value_at_low_level_il_instruction(
+                    il.instr_index, il.src.src
                 )
 
                 if reg_value.type == ConstantValue:
@@ -153,15 +166,18 @@ def find_vtable(bv, function_il):
                         continue
 
                     return reg_value.value
-    
+
     # Couldn't find a vtable.
     return None
+
 
 def get_current_function(bv, address):
     return bv.get_basic_blocks_at(address)[0].function
 
+
 def get_call_index(function, bv, addr):
     return function.get_low_level_il_at(bv.arch, addr)
+
 
 def find_function_offset(vtable, bv, addr):
     function = get_current_function(bv, addr)
@@ -194,7 +210,9 @@ def navigate_to_virtual_function(bv, addr):
     vtable = find_vtable(bv, constructor.low_level_il)
 
     if vtable is None:
-        log_alert("Couldn't find vtable for class {}".format(class_name))
+        log_alert(
+            "Couldn't find vtable for {}".format(constructor.symbol.full_name)
+        )
         return
 
     function_pointer = find_function_offset(vtable, bv, addr)
@@ -205,7 +223,9 @@ def navigate_to_virtual_function(bv, addr):
 
     bv.file.navigate(bv.file.view, function_pointer)
 
+
 PluginCommand.register_for_address(
     "Navigate to Virtual Function",
-    "Navigate to the virtual function called by an indirect call, given the class name",
+    ("Navigate to the virtual function called by "
+        "an indirect call, given the class name"),
     navigate_to_virtual_function)
