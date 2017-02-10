@@ -70,7 +70,6 @@ def handle_const(vtable, bv, expr, current_defs, defs, load_count):
 # operation handlers take the following parameters:
 #   vtable (int): the address of the class's vtable in memory
 #   bv (BinaryView): the BinaryView passed into the plugin callback
-#   il (LowLevelILFunction): the function's LLIL object
 #   expr (LowLevelILInstruction): the expression to handle
 #   current_defs (dict): The current state of register definitions
 #   defs (dict): The register state table for all instructions
