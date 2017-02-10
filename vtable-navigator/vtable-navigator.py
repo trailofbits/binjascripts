@@ -11,45 +11,37 @@ def read_value(bv, addr, size):
         bv.read(addr, size)
     )[0]
 
-def temp_register(il, size):
-    idx = 0
-    while idx < 0x80000000:
-        yield il.reg(size, LLIL_TEMP(idx))
-        idx += 1
-    raise ValueError('Temp register index too large')
-
 def get_llil_basic_block(il, idx):
     for bb in il:
         if bb.start <= idx < bb.end:
             return bb
     return None
 
-def handle_add(vtable, bv, il, expr, current_defs, defs, load_count):
+def handle_add(vtable, bv, expr, current_defs, defs, load_count):
     left = expr.left
     right = expr.right
 
     left_value = operation_handler[left.operation](
-        vtable, bv, il, left, current_defs, defs, load_count
+        vtable, bv, left, current_defs, defs, load_count
     )
-    if left_value is None:
-        return None
 
     right_value = operation_handler[right.operation](
-        vtable, bv, il, right, current_defs, defs, load_count
+        vtable, bv, right, current_defs, defs, load_count
     )
-    if right_value is None:
+
+    if None in (left_value, right_value):
         return None
 
     return left_value + right_value
 
-def handle_load(vtable, bv, il, expr, current_defs, defs, load_count):
+def handle_load(vtable, bv, expr, current_defs, defs, load_count):
     load_count += 1
 
     if load_count == 2:
         return vtable
 
     addr = operation_handler[expr.src.operation](
-        vtable, bv, il, expr.src, current_defs, defs, load_count
+        vtable, bv, expr.src, current_defs, defs, load_count
     )
     if addr is None:
         return
@@ -57,27 +49,21 @@ def handle_load(vtable, bv, il, expr, current_defs, defs, load_count):
     # Read the value at the specified address.
     return read_value(bv, addr, expr.size)
 
-def handle_reg(vtable, bv, il, expr, current_defs, defs, load_count):
-    # In this example, we really shouldn't need to worry about
-    # temporary registers, but we check for it just in case. If we
-    # do hit a temp register, bail.
-    if isinstance(expr.src, (int, long)) and LLIL_REG_IS_TEMP(expr.src):
-        return None
-
+def handle_reg(vtable, bv, expr, current_defs, defs, load_count):
     # Retrieve the LLIL expression that this register currently
     # represents.
-    #
-    # Use a temporary register if no register state found;
-    # this gives a unique undetermined initial register state.
-    instr_index, value = current_defs.get(
-        expr.src, (0, temp_register(il, expr.size))
+    set_reg = current_defs.get(
+        expr.src, None
+    )
+    if set_reg is None:
+        return None
+
+    return operation_handler[set_reg.src.operation](
+        vtable, bv, set_reg.src,
+        defs.get(set_reg.instr_index, {}), defs, load_count
     )
 
-    return operation_handler[value.operation](
-        vtable, bv, il, value, defs.get(instr_index, {}), defs, load_count
-    )
-
-def handle_const(vtable, bv, il, expr, current_defs, defs, load_count):
+def handle_const(vtable, bv, expr, current_defs, defs, load_count):
     return expr.value
 
 # This lets us handle expressions in a more generic way.
@@ -97,25 +83,24 @@ operation_handler[LLIL_CONST] = handle_const
 
 def preprocess_basic_block(bb):
     defs = {}
-    previous_defs = {}
+    current_defs = {}
+
     for instr in bb:
-        current_defs = copy(previous_defs)
+        defs[instr.instr_index] = copy(current_defs)
 
         if instr.operation == LLIL_SET_REG:
-            current_defs[instr.dest] = (instr.instr_index-1, instr.src)
-            previous_defs = current_defs
+            current_defs[instr.dest] = instr
+
         elif instr.operation == LLIL_CALL:
             # wipe out previous definitions since we can't
             # guarantee the call didn't modify registers.
-            previous_defs = {}
-
-        defs[instr.instr_index] = current_defs
+            current_defs.clear()
 
     return defs
 
-def calculate_offset(vtable, bv, il, expr, current_defs, defs):
+def calculate_offset(vtable, bv, expr, current_defs, defs):
     return operation_handler[expr.operation](
-        vtable, bv, il, expr, current_defs, defs, 0
+        vtable, bv, expr, current_defs, defs, 0
     )
 
 def find_constructor(bv):
@@ -195,7 +180,6 @@ def find_function_offset(vtable, bv, addr):
     return calculate_offset(
         vtable,
         bv,
-        function.low_level_il,
         call_il.dest,
         defs.get(call_il_idx, {}),
         defs
