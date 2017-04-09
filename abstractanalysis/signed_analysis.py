@@ -147,7 +147,7 @@ def trace_variables(view, inst, func):
 	for o in inst.operands:
 		if type(o) == type(inst):
 			# o is an instruction
-			#print func.get_stack_vars_referenced_by(view.arch, o.address)
+			#print func.get_stack_vars_referenced_by(o.address)
 			#print o
 			#print type(o)
 			trace_variables(view, o, func)
@@ -177,7 +177,7 @@ def check_signedness_operation(view, inst, func):
 		found = True
 
 	if found:
-		print func.get_stack_vars_referenced_by(view.arch, inst.address)
+		print func.get_stack_vars_referenced_by(inst.address)
 		# check if in map, if so add signess type, if not, add
 		# add info about +-0\? or not signed potential
 		# print out in comment
@@ -290,7 +290,7 @@ def update_registers(view, func, inst, regs, path):
 			y = None
 
 			# assume reg is first operand of 2nd inst, var is 2nd (aka 1st op is the dest of the whole expr)
-			for v in func.get_stack_vars_referenced_by(view.arch, new_inst.address):
+			for v in func.get_stack_vars_referenced_by(new_inst.address):
 				if path.contains(v.name) == True:
 					variable = path.get(v.name)
 					# this is subtraction!
@@ -328,7 +328,7 @@ def update_registers(view, func, inst, regs, path):
 			x = regs.get_current_abstract_domain(reg)
 			y = None
 			variable = None
-			for v in func.get_stack_vars_referenced_by(view.arch, new_inst.address):
+			for v in func.get_stack_vars_referenced_by(new_inst.address):
 				if path.contains(v.name) == True:
 					variable = path.get(v.name)
 					# this is subtraction!
@@ -365,7 +365,7 @@ def update_registers(view, func, inst, regs, path):
 		# basic set using 1 src
 		else:		
 			reg = str(inst.operands[0])
-			for v in func.get_stack_vars_referenced_by(view.arch, inst.address):
+			for v in func.get_stack_vars_referenced_by(inst.address):
 				if path.contains(v.name) == True:
 					variable = path.get(v.name)
 					regs.update_registers(reg, variable.get_current_abstract_domain().return_val())
@@ -383,14 +383,14 @@ def update_variables(view, func, inst, regs, path):
 	if "LLIL_STORE" == op:
 		src = regs.get_current_abstract_domain(str(inst.operands[1]))
 		if src != None:
-			for v in func.get_stack_vars_referenced_by(view.arch, inst.address):
+			for v in func.get_stack_vars_referenced_by(inst.address):
 				variable = path.get(v.name)
 				variable.alter_current_abstract_domain(src.return_val())
 				return v.name + ": " + src.return_val() 
 		# maybe its constant
 		const = str(inst.operands[1]).replace(".", "")
 		if const.isdigit() == True:
-			for v in func.get_stack_vars_referenced_by(view.arch, inst.address):
+			for v in func.get_stack_vars_referenced_by(inst.address):
 				variable = path.get(v.name)
 				if float(const) > 0:
 					cd = "+"
@@ -411,7 +411,7 @@ def update_variables(view, func, inst, regs, path):
 			path.add_variable(extern_var)
 
 		sv = path.get(src_var)
-		for v in func.get_stack_vars_referenced_by(view.arch, inst.address):
+		for v in func.get_stack_vars_referenced_by(inst.address):
 			if src_var != v.name:
 				variable = path.get(v.name)
 				variable.alter_current_abstract_domain(sv.get_current_abstract_domain().return_val())
@@ -494,7 +494,7 @@ def function_sign_analysis(view, func, recurse_level, ap, regs):
 				#program.add_path(new_ap)
 				
 			# loop for new variables
-			for v in func.get_stack_vars_referenced_by(view.arch, insn.address):
+			for v in func.get_stack_vars_referenced_by(insn.address):
 				if ap.contains(v.name) == False:
 						av = abstract_variable(v.name, v, insn)
 						concrete_string = "" 
@@ -522,7 +522,7 @@ def function_sign_analysis(view, func, recurse_level, ap, regs):
 			#	if type(o) == type(insn):
 			#		print 'operands'
 			#		print o
-			#		print func.get_stack_vars_referenced_by(view.arch, o.address)
+			#		print func.get_stack_vars_referenced_by(o.address)
 					#check_signedness_operation(view, o, func)
 			#check_signedness_operation(view, insn, func)
 
