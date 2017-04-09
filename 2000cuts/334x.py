@@ -6,7 +6,6 @@ try:
 except ImportError:
     sys.path.append("/Applications/Binary Ninja.app/Contents/Resources/python/")
     import binaryninja
-import time
 import socket
 import base64
 
@@ -36,8 +35,7 @@ while True:
     # Open a binary view to the challenge as an elf
     print "Analyzing {0}".format(chal)
     bv = binaryninja.BinaryViewType["ELF"].open(chal)
-    bv.update_analysis()
-    time.sleep(0.1)  # bandaid until there's blocking analysis
+    bv.update_analysis_and_wait()
     
     # start at the entry point
     print "Entry Point: {0:x}".format(bv.entry_point)
@@ -54,7 +52,7 @@ while True:
                 entry_calls.append(il)
     
     start_call = entry_calls[1]            
-    start = bv.get_function_at(bv.platform, start_call.operands[0].value)
+    start = bv.get_function_at(start_call.operands[0].value)
     
     print "start: {0}".format(start)
 
@@ -65,7 +63,7 @@ while True:
             if il.operation != binaryninja.core.LLIL_CALL:
                 continue
     
-            main = bv.get_function_at(bv.platform, il.operands[0].value)
+            main = bv.get_function_at(il.operands[0].value)
     
     print "main: {0}".format(main)
     
@@ -86,14 +84,14 @@ while True:
     
     # Query the parameters to the memcmp
     # memcmp(dst, src, length)
-    canary_frame = main.get_parameter_at(bv.arch, memcmp.address, None, 0)
-    canary_address = main.get_parameter_at(bv.arch, memcmp.address, None, 1)
-    canary_width = main.get_parameter_at(bv.arch, memcmp.address, None, 2)
+    canary_frame = main.get_parameter_at(memcmp.address, None, 0)
+    canary_address = main.get_parameter_at(memcmp.address, None, 1)
+    canary_width = main.get_parameter_at(memcmp.address, None, 2)
     
     # Use that to read the canary
     canary = bv.read(canary_address.value, canary_width.value)
     
-    buffer_frame = main.get_parameter_at(bv.arch, read_buf.address, None, 0)
+    buffer_frame = main.get_parameter_at(read_buf.address, None, 0)
     
     # The canary is between the buffer and the saved stack registers
     buffer_size = (buffer_frame.offset - canary_frame.offset) * -1
