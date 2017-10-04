@@ -4,7 +4,8 @@ from collections import defaultdict
 from copy import copy
 
 from binaryninja import (Endianness, LowLevelILOperation, PluginCommand,
-                         RegisterValueType, get_choice_input, log_alert)
+                         RegisterValueType, get_choice_input, log_alert,
+                         log_info)
 
 
 def read_value(bv, addr, size):
@@ -60,7 +61,7 @@ def handle_load(vtable, bv, expr, current_defs, defs, load_count):
 def handle_reg(vtable, bv, expr, current_defs, defs, load_count):
     # Retrieve the LLIL expression that this register currently
     # represents.
-    set_reg = current_defs.get(expr.src, None)
+    set_reg = current_defs.get(expr.src.name, None)
     if set_reg is None:
         return None
 
@@ -72,7 +73,7 @@ def handle_reg(vtable, bv, expr, current_defs, defs, load_count):
 
 
 def handle_const(vtable, bv, expr, current_defs, defs, load_count):
-    return expr.value
+    return expr.constant
 
 
 # This lets us handle expressions in a more generic way.
@@ -98,7 +99,7 @@ def preprocess_basic_block(bb):
         defs[instr.instr_index] = copy(current_defs)
 
         if instr.operation == LowLevelILOperation.LLIL_SET_REG:
-            current_defs[instr.dest] = instr
+            current_defs[instr.dest.name] = instr
 
         elif instr.operation == LowLevelILOperation.LLIL_CALL:
             # wipe out previous definitions since we can't
@@ -144,12 +145,12 @@ def find_vtable(bv, function_il):
             # vtable is referenced directly
             if (il.dest.operation == LowLevelILOperation.LLIL_REG and
                     il.src.operation == LowLevelILOperation.LLIL_CONST):
-                fp = read_value(bv, il.src.value, bv.address_size)
+                fp = read_value(bv, il.src.constant, bv.address_size)
 
                 if not bv.is_offset_executable(fp):
                     continue
 
-                return il.src.value
+                return il.src.constant
 
             # vtable is first loaded into a register, then stored
             if (il.dest.operation == LowLevelILOperation.LLIL_REG and
@@ -174,20 +175,15 @@ def get_current_function(bv, address):
     return bv.get_basic_blocks_at(address)[0].function
 
 
-def get_call_index(function, bv, addr):
-    return function.get_low_level_il_at(addr)
-
-
 def find_function_offset(vtable, bv, addr):
     function = get_current_function(bv, addr)
 
-    call_il_idx = get_call_index(function, bv, addr)
-    call_il = function.low_level_il[call_il_idx]
+    call_il = function.get_low_level_il_at(addr)
 
     if call_il.operation != LowLevelILOperation.LLIL_CALL:
         return
 
-    bb = get_llil_basic_block(function.low_level_il, call_il_idx)
+    bb = get_llil_basic_block(function.low_level_il, call_il.instr_index)
 
     defs = preprocess_basic_block(bb)
 
@@ -195,7 +191,7 @@ def find_function_offset(vtable, bv, addr):
         vtable,
         bv,
         call_il.dest,
-        defs.get(call_il_idx, {}),
+        defs.get(call_il.instr_index, {}),
         defs
     )
 
