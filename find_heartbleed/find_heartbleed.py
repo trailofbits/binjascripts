@@ -7,7 +7,7 @@ from binaryninja import (BinaryViewType, MediumLevelILInstruction,
 from bnilvisitor import BNILVisitor
 from tqdm import tqdm
 from z3 import (UGT, ULT, And, Array, BitVec, BitVecSort, Concat, Extract,
-                Implies, LShR, Not, Or, Solver, ZeroExt, simplify, unsat)
+                LShR, Not, Or, Solver, ZeroExt, simplify, unsat)
 
 # idea: assume byte swapping means that there will be 2+ assignments
 # that must be a single byte. Each time an MLIL_SET_VAR_SSA operation
@@ -106,16 +106,16 @@ class ByteSwapModeler(BNILVisitor):
         if 1 < byte_values_len <= self.var.src.var.type.width:
             var = create_BitVec(self.var.src, self.var.src.var.type.width)
 
-            ordering = [
+            ordering = list(reversed([
                 self.byte_values[x]
                 for x in sorted(self.byte_values.keys())
-            ]
+            ]))
 
             reverse_var = Concat(
-                *[
+                *reversed([
                     Extract(i-1, i-8, var)
                     for i in range(len(ordering) * 8, 0, -8)
-                ]
+                ])
             )
 
             if len(ordering) < 4:
@@ -136,7 +136,7 @@ class ByteSwapModeler(BNILVisitor):
             # should be a byte-swapped value.
             self.solver.add(
                 Not(
-                    Implies(
+                    And(
                         var == ZeroExt(
                             var.size() - len(ordering)*8,
                             Concat(*ordering)
@@ -426,7 +426,7 @@ class ByteSwapModeler(BNILVisitor):
                 dest == (
                     (prev & mask) | ZeroExt(
                             (
-                                expr.dest.var.type.width - 
+                                expr.dest.var.type.width -
                                 (expr.size + expr.offset)
                             ) * 8,
                             (src << (expr.offset * 8))
@@ -481,7 +481,7 @@ if __name__ == '__main__':
             "memcpy at 0x{:x} in {} uses a size parameter that potentially"
             " comes from an untrusted source!"
         ).format(
-            call, 
+            call,
             bv.get_symbol_at(
                 bv.get_functions_containing(func)[0].start
             ).name
