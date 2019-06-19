@@ -1,0 +1,17 @@
+{
+	"plugin": {
+		"name": "Graph Slice",
+		"type": ["ui"],
+		"api": "python2",
+		"description": "Slice a MLIL SSA Variable to a NetworkX Graph",
+		"longdescription": "",
+		"license": {
+			"name": "Apache 2"
+		},
+		"dependencies": {
+			"pip": ["networkx", "matplotlib"]
+		},
+		"version": "1.0 alpha",
+		"author": "Trail of Bits"
+	}
+}
